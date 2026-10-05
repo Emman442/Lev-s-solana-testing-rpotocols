@@ -3,8 +3,7 @@
   "scripts": {
     "js": [
       {
-        "from": "@codama/renderers-js",
-        "args": ["./app/generated/vault"]
+        "from": "@codama/renderers-js"
       }
     ]
   }
