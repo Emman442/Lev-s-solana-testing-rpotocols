@@ -118,7 +118,7 @@ export default function Home() {
           <span className="text-sm font-semibold tracking-tight">Lev tx inspect</span>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <ClusterSelect />
+            {/* <ClusterSelect /> */}
             <WalletButton />
           </div>
         </header>
