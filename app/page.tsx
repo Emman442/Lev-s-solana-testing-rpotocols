@@ -19,7 +19,6 @@ const OTHER = [
   { id: "kora", label: "Kora", needsWallet: false },
   { id: "fee-payer", label: "Fee payer", needsWallet: false },
   { id: "candymachine", label: "Candy Machine", needsWallet: false },
-  { id: "okx", label: "OKX", needsWallet: false },
 ] as const;
 
 type ApiJson = {

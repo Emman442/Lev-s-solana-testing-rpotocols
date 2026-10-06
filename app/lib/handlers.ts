@@ -210,9 +210,6 @@ export async function feePayer(): Promise<InspectResult> {
 export async function candymachine(): Promise<InspectResult> {
     return fail("Needs your devnet Candy Machine and third-party signer. Not a public API.");
 }
-export async function okx(body: Body): Promise<InspectResult> {
-    return fail("Needs OKX API credentials.", { info: { wallet: body.wallet } });
-}
 
 export const handlers = {
     bags,
@@ -226,5 +223,4 @@ export const handlers = {
     kora,
     "fee-payer": feePayer,
     candymachine,
-    okx,
 };
