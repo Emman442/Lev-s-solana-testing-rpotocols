@@ -16,7 +16,6 @@ const OTHER = [
   { id: "dflow", label: "DFlow", needsWallet: true },
   { id: "tensor", label: "Tensor", needsWallet: true },
   { id: "magiceden", label: "Magic Eden", needsWallet: true },
-  { id: "kora", label: "Kora", needsWallet: false },
   { id: "fee-payer", label: "Fee payer", needsWallet: false },
   { id: "candymachine", label: "Candy Machine", needsWallet: false },
 ] as const;
