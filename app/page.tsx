@@ -15,9 +15,9 @@ const OTHER = [
   { id: "raydium", label: "Raydium", needsWallet: true },
   { id: "dflow", label: "DFlow", needsWallet: true },
   { id: "tensor", label: "Tensor", needsWallet: true },
-  { id: "magiceden", label: "Magic Eden", needsWallet: true },
-  { id: "fee-payer", label: "Fee payer", needsWallet: false },
-  { id: "candymachine", label: "Candy Machine", needsWallet: false },
+  // { id: "magiceden", label: "Magic Eden", needsWallet: true },
+  // { id: "fee-payer", label: "Fee payer", needsWallet: false },
+  { id: "candymachine", label: "Candy Machine", needsWallet: true   },
 ] as const;
 
 type ApiJson = {
@@ -46,6 +46,10 @@ export default function Home() {
   const [tokenMint, setTokenMint] = useState("");
   const [ipfs, setIpfs] = useState("");
   const [configKey, setConfigKey] = useState("");
+
+  const [blinkUrl, setBlinkUrl] = useState("");
+  const [blinkValue, setBlinkValue] = useState("1");
+  const [blinkActions, setBlinkActions] = useState<{ label: string; href: string }[]>([]);
 
   function show(json: ApiJson) {
     setResult(json);
@@ -91,6 +95,27 @@ export default function Home() {
       setBusy(null);
     }
   }
+
+  async function loadBlink() {
+    setBusy("blink");
+    try {
+      const json = await fetch("/api/blink", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ actionUrl: blinkUrl }),
+      }).then((r) => r.json());
+      if (!json.ok) return toast.error(json.error || "failed");
+      setBlinkActions(json.actions || []);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const buildBlink = (href: string) => {
+    if (!address) return toast.error("Connect wallet");
+    const filled = href.replace(/\{[^}]+\}/g, blinkValue);
+    return post("/api/blink", { actionUrl: blinkUrl, wallet: address, href: filled }, "blink");
+  };
 
   const buildConfig = () => {
     if (!address) return toast.error("Connect wallet");
@@ -156,6 +181,20 @@ export default function Home() {
                 {busy === "bags-launch" ? "…" : "Build launch tx"}
               </button>
             </section>
+{/* 
+            <section className="grid gap-2">
+              <h2 className="text-sm font-semibold">4. Blink inspector</h2>
+              <input className={input} value={blinkUrl} onChange={(e) => setBlinkUrl(e.target.value)} placeholder="action URL or dial.to link" />
+              <input className={input} value={blinkValue} onChange={(e) => setBlinkValue(e.target.value)} placeholder="value for any {param}" />
+              <button className={btn} disabled={busy !== null || !blinkUrl} onClick={loadBlink}>Load actions</button>
+              <div className="flex flex-wrap gap-2">
+                {blinkActions.map((a) => (
+                  <button key={a.href} className={btn} disabled={busy !== null || !address} onClick={() => buildBlink(a.href)}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </section> */}
 
             <details className="rounded border p-3">
               <summary className="cursor-pointer text-sm font-semibold">Other methods</summary>
@@ -198,207 +237,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// "use client";
-
-// import { useState } from "react";
-// import { toast } from "sonner";
-// import { useWallet } from "./lib/wallet/context";
-// import { GridBackground } from "./components/grid-background";
-// import { ThemeToggle } from "./components/theme-toggle";
-// import { ClusterSelect } from "./components/cluster-select";
-// import { WalletButton } from "./components/wallet-button";
-
-// const OTHER = [
-//   { id: "jupiter", label: "Jupiter", needsWallet: true },
-//   { id: "jupiter-order", label: "Jupiter Ultra", needsWallet: true },
-//   { id: "raydium", label: "Raydium", needsWallet: true },
-//   { id: "dflow", label: "DFlow", needsWallet: true },
-//   { id: "tensor", label: "Tensor", needsWallet: true },
-//   { id: "magiceden", label: "Magic Eden", needsWallet: true },
-//   { id: "kora", label: "Kora", needsWallet: false },
-//   { id: "fee-payer", label: "Fee payer", needsWallet: false },
-//   { id: "candymachine", label: "Candy Machine", needsWallet: false },
-//   { id: "okx", label: "OKX", needsWallet: false },
-// ] as const;
-
-// export default function Home() {
-//   const { wallet } = useWallet();
-//   const address = wallet?.account.address;
-
-//   const [busy, setBusy] = useState<string | null>(null);
-//   const [result, setResult] = useState<unknown>(null);
-
-//   const [name, setName] = useState("Inspect Only");
-//   const [symbol, setSymbol] = useState("INSP");
-//   const [description, setDescription] = useState("Inspection only. Do not launch.");
-//   const [image, setImage] = useState<File | null>(null);
-
-//   const [tokenMint, setTokenMint] = useState("");
-//   const [ipfs, setIpfs] = useState("");
-//   const [configKey, setConfigKey] = useState("");
-
-//   function show(json: { ok?: boolean; error?: string; label?: string; txs?: string[]; info?: { tokenMint?: string; tokenMetadata?: string } }) {
-//     setResult(json);
-//     if (json.info?.tokenMint) setTokenMint(json.info.tokenMint);
-//     if (json.info?.tokenMetadata) setIpfs(json.info.tokenMetadata);
-//     if (!json.ok) toast.error(json.error || "failed");
-//     else toast.success(`${json.label || "ok"}: ${(json.txs || []).length} tx, not sent`);
-//   }
-
-//   async function createInfo() {
-//     if (!image) return toast.error("Pick an image file");
-//     setBusy("bags");
-//     const form = new FormData();
-//     form.set("name", name);
-//     form.set("symbol", symbol);
-//     form.set("description", description);
-//     form.set("image", image);
-//     try {
-//       const json = await fetch("/api/bags", { method: "POST", body: form }).then((r) => r.json());
-//       show(json);
-//     } finally {
-//       setBusy(null);
-//     }
-//   }
-
-//   async function buildLaunch() {
-//     if (!address) return toast.error("Connect wallet");
-//     setBusy("bags-launch");
-//     try {
-//       const json = await fetch("/api/bags-launch", {
-//         method: "POST",
-//         headers: { "content-type": "application/json" },
-//         body: JSON.stringify({ wallet: address, tokenMint, ipfs, configKey }),
-//       }).then((r) => r.json());
-//       show(json);
-//     } finally {
-//       setBusy(null);
-//     }
-//   }
-
-//   async function run(id: string) {
-//     setBusy(id);
-//     try {
-//       const json = await fetch(`/api/${id}`, {
-//         method: "POST",
-//         headers: { "content-type": "application/json" },
-//         body: JSON.stringify({ wallet: address }),
-//       }).then((r) => r.json());
-//       show(json);
-//     } finally {
-//       setBusy(null);
-//     }
-//   }
-
-//   async function buildConfig() {
-//   if (!address) return toast.error("Connect wallet");
-//   if (!tokenMint) return toast.error("Create token info first");
-//   setBusy("bags-config");
-//   try {
-//     const json = await fetch("/api/bags-config", {
-//       method: "POST",
-//       headers: { "content-type": "application/json" },
-//       body: JSON.stringify({ wallet: address, tokenMint }),
-//     }).then((r) => r.json());
-//     if (json.configKey) setConfigKey(json.configKey);
-//     show(json);
-//   } finally {
-//     setBusy(null);
-//   }
-// }
-
-//   return (
-//     <div className="relative min-h-screen bg-background text-foreground">
-//       <GridBackground />
-//       <div className="relative z-10">
-//         <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-//           <span className="text-sm font-semibold tracking-tight">Lev tx inspect</span>
-//           <div className="flex items-center gap-3">
-//             <ThemeToggle />
-//             <ClusterSelect />
-//             <WalletButton />
-//           </div>
-//         </header>
-
-//         <main className="mx-auto grid max-w-6xl gap-8 px-6 py-8">
-//           <p className="text-sm text-amber-500">Fetch and inspect only. Do not broadcast a Bags launch.</p>
-
-//           <section className="grid gap-2">
-//             <h2 className="text-sm font-semibold">1. Bags token info</h2>
-//             <input className="rounded border px-3 py-2 text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="name" />
-//             <input className="rounded border px-3 py-2 text-sm" value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="symbol" />
-//             <input className="rounded border px-3 py-2 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="description" />
-//             <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(e) => setImage(e.target.files?.[0] || null)} />
-//             <button className="w-fit rounded border px-3 py-2 text-sm" disabled={busy !== null} onClick={createInfo}>
-//               {busy === "bags" ? "…" : "Create token info"}
-//             </button>
-//           </section>
-
-
-//           <section className="grid gap-2">
-//             <h2 className="text-sm font-semibold">2. Bags fee-share config</h2>
-//             <p className="text-sm text-amber-500">
-//               This builds a mainnet transaction. Signing and sending it spends SOL. It does not launch the token.
-//             </p>
-//             <button className="w-fit rounded border px-3 py-2 text-sm" disabled={busy !== null || !address} onClick={buildConfig}>
-//               {busy === "bags-config" ? "…" : "Build config tx"}
-//             </button>
-//           </section>
-
-//           <section className="grid gap-2">
-//             <h2 className="text-sm font-semibold">2. Bags launch plan</h2>
-//             <input className="rounded border px-3 py-2 text-sm" value={tokenMint} onChange={(e) => setTokenMint(e.target.value)} placeholder="tokenMint from step 1" />
-//             <input className="rounded border px-3 py-2 text-sm" value={ipfs} onChange={(e) => setIpfs(e.target.value)} placeholder="metadata url from step 1" />
-//             <input className="rounded border px-3 py-2 text-sm" value={configKey} onChange={(e) => setConfigKey(e.target.value)} placeholder="configKey, only if you already have one" />
-//             <button className="w-fit rounded border px-3 py-2 text-sm" disabled={busy !== null || !address} onClick={buildLaunch}>
-//               {busy === "bags-launch" ? "…" : "Build launch tx, do not send"}
-//             </button>
-//           </section>
-
-//           <section className="flex flex-wrap gap-2">
-//             {OTHER.map((m) => (
-//               <button key={m.id} className="rounded border px-3 py-2 text-sm disabled:opacity-40" disabled={busy !== null || (m.needsWallet && !address)} onClick={() => run(m.id)}>
-//                 {busy === m.id ? "…" : m.label}
-//               </button>
-//             ))}
-//           </section>
-
-//           <pre className="overflow-auto rounded border p-3 text-xs">{result ? JSON.stringify(result, null, 2) : "no result yet"}</pre>
-//         </main>
-//       </div>
-//     </div>
-//   );
-// }

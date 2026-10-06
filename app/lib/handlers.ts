@@ -1,3 +1,14 @@
+
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { mplCandyMachine, mintV1 } from "@metaplex-foundation/mpl-core-candy-machine";
+import { mplCore } from "@metaplex-foundation/mpl-core";
+import { setComputeUnitLimit } from "@metaplex-foundation/mpl-toolbox";
+import {
+  createNoopSigner, createSignerFromKeypair, generateSigner,
+  publicKey, signerIdentity, some, transactionBuilder,
+} from "@metaplex-foundation/umi";
+
+
 export type InspectResult = {
     ok: boolean;
     label?: string;
@@ -74,7 +85,7 @@ export async function bagsLaunch(body: Body): Promise<InspectResult> {
 }
 
 export async function jupiter(body: Body): Promise<InspectResult> {
-    const headers = { "x-api-key": process.env.JUPITER_API_KEY || "" };
+    const headers = { "x-api-key": "jup_57a58fb7d360e993811ac6e59023b81b808eb904e3afa76b47fb7ee5a9d1fc20" };
     const q = new URLSearchParams({
         inputMint: SOL,
         outputMint: USDC,
@@ -103,7 +114,7 @@ export async function jupiterOrder(body: Body): Promise<InspectResult> {
         taker: body.wallet || "",
     });
     const json = await fetch("https://api.jup.ag/ultra/v1/order?" + q, {
-        headers: { "x-api-key": process.env.JUPITER_API_KEY || "" },
+        headers: { "x-api-key": "jup_57a58fb7d360e993811ac6e59023b81b808eb904e3afa76b47fb7ee5a9d1fc20" },
     }).then((r) => r.json());
     if (!json.transaction) return fail("jupiter ultra order failed", { json });
     return ok("Jupiter Ultra order", "A + execute signer", [json.transaction], {
@@ -150,6 +161,7 @@ export async function dflow(body: Body): Promise<InspectResult> {
     const json = await fetch("https://quote-api.dflow.net/order?" + q, {
         headers: process.env.DFLOW_API_KEY ? { "x-api-key": process.env.DFLOW_API_KEY } : {},
     }).then((r) => r.json());
+    console.log("json", json)
     if (!json.transaction) return fail("dflow order failed", { json });
     return ok("DFlow order", "A", [json.transaction]);
 }
@@ -186,29 +198,61 @@ export async function magiceden(body: Body): Promise<InspectResult> {
     return ok("Magic Eden buy", "check slots", [Buffer.from(data).toString("base64")]);
 }
 
-export async function kora(body: Body): Promise<InspectResult> {
-    if (!body.signedTx) return fail("user must sign first, then post signedTx");
-    if (!process.env.KORA_URL) return fail("set KORA_URL");
-    const json = await fetch(process.env.KORA_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "signTransaction",
-            params: { transaction: body.signedTx },
-        }),
-    }).then((r) => r.json());
-    const signed = json.result?.signed_transaction as string | undefined;
-    if (!signed) return fail("kora did not sign", { json });
-    return ok("Kora fee payer", "B-after-user", [signed], { signer: json.result.signer_pubkey });
-}
 
 export async function feePayer(): Promise<InspectResult> {
     return fail("Devnet control. partialSign a memo with FEE_PAYER_SECRET on the server. Do not use a mainnet key.");
 }
-export async function candymachine(): Promise<InspectResult> {
-    return fail("Needs your devnet Candy Machine and third-party signer. Not a public API.");
+function readSecret(): Uint8Array {
+  const raw = process.env.THIRD_PARTY_SECRET;
+  if (!raw) throw new Error("THIRD_PARTY_SECRET is not set, check .env.local and restart dev");
+  const cleaned = raw.trim().replace(/^['"]|['"]$/g, "");
+  return Uint8Array.from(JSON.parse(cleaned));
+}
+
+
+export async function candymachine(body: Body): Promise<InspectResult> {
+  if (!body.wallet) return fail("connect wallet first");
+  console.log(process.env.THIRD_PARTY_SECRET ? "THIRD_PARTY_SECRET is set" : "THIRD_PARTY_SECRET is not set");
+console.log(process.env.CM_ID ? "CM_ID is set" : "CM_ID is not set");
+console.log(process.env.CM_COLLECTION ? "CM_COLLECTION is set" : "CM_COLLECTION is not set");
+console.log(process.env.CM_GUARD ? "CM_GUARD is set" : "CM_GUARD is not set");
+
+  const missing = ["THIRD_PARTY_SECRET", "CM_ID", "CM_COLLECTION", "CM_GUARD"].filter(
+    (k) => !process.env[k]
+  );
+  if (missing.length) return fail(`missing env vars ${missing.join(", ")}`);
+
+  try {
+    const umi = createUmi("https://api.devnet.solana.com").use(mplCore()).use(mplCandyMachine());
+    umi.use(signerIdentity(createNoopSigner(publicKey(body.wallet))));
+
+    const thirdParty = createSignerFromKeypair(
+      umi,
+      umi.eddsa.createKeypairFromSecretKey(readSecret())
+    );
+    const asset = generateSigner(umi);
+
+    const txBuilder = await transactionBuilder()
+      .add(setComputeUnitLimit(umi, { units: 800_000 }))
+      .add(
+        mintV1(umi, {
+          candyMachine: publicKey(process.env.CM_ID!),
+          collection: publicKey(process.env.CM_COLLECTION!),
+          candyGuard: publicKey(process.env.CM_GUARD!),
+          asset,
+          mintArgs: { thirdPartySigner: some({ signer: thirdParty }) },
+        })
+      )
+      .setLatestBlockhash(umi);
+    const tx = await txBuilder.buildAndSign(umi);
+
+    const b64 = Buffer.from(umi.transactions.serialize(tx)).toString("base64");
+    return ok("Candy Machine mint (devnet)", "B", [b64], {
+      note: `reference build. asset ${asset.publicKey}, third party signer ${thirdParty.publicKey}`,
+    });
+  } catch (e) {
+    return fail(`candy machine build failed, ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 export const handlers = {
@@ -220,7 +264,6 @@ export const handlers = {
     dflow,
     tensor,
     magiceden,
-    kora,
     "fee-payer": feePayer,
     candymachine,
 };
