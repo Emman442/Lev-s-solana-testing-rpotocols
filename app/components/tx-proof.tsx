@@ -37,7 +37,7 @@ function Card({ b58, index, total, me, tokenMint }: {
   }
 
   const preSigned = info?.slots.some((s) => s.filled && s.valid && s.pubkey !== me);
-  const pct = Math.min(100, (info?.bytes / LIMIT) * 100);
+  const pct = Math.min(100, ((info?.bytes ?? 0) / LIMIT) * 100);
   
   return (
     <div className="grid gap-3 rounded-xl border p-4">

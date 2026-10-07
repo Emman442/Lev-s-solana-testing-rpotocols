@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { useWallet } from "./lib/wallet/context";
 import { GridBackground } from "./components/grid-background";
 import { ThemeToggle } from "./components/theme-toggle";
-import { ClusterSelect } from "./components/cluster-select";
 import { WalletButton } from "./components/wallet-button";
 import { TxProof } from "./components/tx-proof";
 
@@ -15,8 +14,6 @@ const OTHER = [
   { id: "raydium", label: "Raydium", needsWallet: true },
   { id: "dflow", label: "DFlow", needsWallet: true },
   { id: "tensor", label: "Tensor", needsWallet: true },
-  // { id: "magiceden", label: "Magic Eden", needsWallet: true },
-  // { id: "fee-payer", label: "Fee payer", needsWallet: false },
   { id: "candymachine", label: "Candy Machine", needsWallet: true   },
   { id: "metaplex", label: "Metaplex Genesis", needsWallet: true },
 { id: "solana-pay-mint", label: "Solana Pay mint", needsWallet: true },
