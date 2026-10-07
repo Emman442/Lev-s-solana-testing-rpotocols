@@ -18,6 +18,8 @@ const OTHER = [
   // { id: "magiceden", label: "Magic Eden", needsWallet: true },
   // { id: "fee-payer", label: "Fee payer", needsWallet: false },
   { id: "candymachine", label: "Candy Machine", needsWallet: true   },
+  { id: "metaplex", label: "Metaplex Genesis", needsWallet: true },
+{ id: "solana-pay-mint", label: "Solana Pay mint", needsWallet: true },
 ] as const;
 
 type ApiJson = {
@@ -49,7 +51,6 @@ export default function Home() {
 
   const [blinkUrl, setBlinkUrl] = useState("");
   const [blinkValue, setBlinkValue] = useState("1");
-  const [blinkActions, setBlinkActions] = useState<{ label: string; href: string }[]>([]);
 
   function show(json: ApiJson) {
     setResult(json);
@@ -96,20 +97,6 @@ export default function Home() {
     }
   }
 
-  async function loadBlink() {
-    setBusy("blink");
-    try {
-      const json = await fetch("/api/blink", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ actionUrl: blinkUrl }),
-      }).then((r) => r.json());
-      if (!json.ok) return toast.error(json.error || "failed");
-      setBlinkActions(json.actions || []);
-    } finally {
-      setBusy(null);
-    }
-  }
 
   const buildBlink = (href: string) => {
     if (!address) return toast.error("Connect wallet");
@@ -181,20 +168,6 @@ export default function Home() {
                 {busy === "bags-launch" ? "…" : "Build launch tx"}
               </button>
             </section>
-{/* 
-            <section className="grid gap-2">
-              <h2 className="text-sm font-semibold">4. Blink inspector</h2>
-              <input className={input} value={blinkUrl} onChange={(e) => setBlinkUrl(e.target.value)} placeholder="action URL or dial.to link" />
-              <input className={input} value={blinkValue} onChange={(e) => setBlinkValue(e.target.value)} placeholder="value for any {param}" />
-              <button className={btn} disabled={busy !== null || !blinkUrl} onClick={loadBlink}>Load actions</button>
-              <div className="flex flex-wrap gap-2">
-                {blinkActions.map((a) => (
-                  <button key={a.href} className={btn} disabled={busy !== null || !address} onClick={() => buildBlink(a.href)}>
-                    {a.label}
-                  </button>
-                ))}
-              </div>
-            </section> */}
 
             <details className="rounded border p-3">
               <summary className="cursor-pointer text-sm font-semibold">Other methods</summary>

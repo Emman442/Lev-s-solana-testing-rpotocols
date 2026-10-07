@@ -7,6 +7,14 @@ import {
   createNoopSigner, createSignerFromKeypair, generateSigner,
   publicKey, signerIdentity, some, transactionBuilder,
 } from "@metaplex-foundation/umi";
+import { createLaunch, genesis, type CreateLaunchInput } from "@metaplex-foundation/genesis";
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  MINT_SIZE,
+  TOKEN_PROGRAM_ID,
+  createInitializeMint2Instruction,
+  getMinimumBalanceForRentExemptMint,
+} from "@solana/spl-token";
 
 
 export type InspectResult = {
@@ -209,6 +217,84 @@ function readSecret(): Uint8Array {
   return Uint8Array.from(JSON.parse(cleaned));
 }
 
+export async function metaplexGenesis(body: Body): Promise<InspectResult> {
+  if (!body.wallet) return fail("connect wallet first");
+  // if (!process.env.GENESIS_IMAGE_URL) return fail("set GENESIS_IMAGE_URL to an https image url");
+
+  try {
+    const umi = createUmi("https://api.devnet.solana.com").use(genesis());
+    umi.use(signerIdentity(createNoopSigner(publicKey(body.wallet))));
+
+    const input: CreateLaunchInput = {
+      wallet: body.wallet,
+      network: "solana-devnet",
+      token: {
+        name: "Lev Inspect",
+        symbol: "LEVI",
+        image: "https://res.cloudinary.com/alchemy-website/image/upload/v1694675413/dapp-store/dapp-logos/Metaplex.jpg",
+        description: "Inspection only, devnet",
+      },
+      launchType: "launchpool",
+      launch: {
+        launchpool: {
+          tokenAllocation: 500_000_000,
+          depositStartTime: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          raiseGoal: 250,
+          raydiumLiquidityBps: 5000,
+          fundsRecipient: body.wallet,
+        },
+      },
+    };
+
+    const res = await createLaunch(umi, {}, input);
+    const txs = res.transactions.map((tx) =>
+      Buffer.from(umi.transactions.serialize(tx)).toString("base64")
+    );
+    return ok("Metaplex Genesis launch (devnet)", "unverified", txs, {
+      note: `mint ${res.mintAddress}, genesis ${res.genesisAccount}. Do not send.`,
+    });
+  } catch (e) {
+    return fail(`genesis failed, ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+
+
+export async function solanaPayMint(body: Body): Promise<InspectResult> {
+  if (!body.wallet) return fail("connect wallet first");
+  try {
+    const user = new PublicKey(body.wallet);
+    const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+    const mint = Keypair.generate(); // used once, never stored
+
+    const lamports = await getMinimumBalanceForRentExemptMint(connection);
+    const { blockhash } = await connection.getLatestBlockhash();
+
+    const tx = new Transaction();
+    tx.feePayer = user;
+    tx.recentBlockhash = blockhash;
+    tx.add(
+      SystemProgram.createAccount({
+        fromPubkey: user,
+        newAccountPubkey: mint.publicKey,
+        space: MINT_SIZE,
+        lamports,
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      createInitializeMint2Instruction(mint.publicKey, 0, user, user)
+    );
+    tx.partialSign(mint);
+
+    const b64 = tx
+      .serialize({ requireAllSignatures: false, verifySignatures: false })
+      .toString("base64");
+    return ok("Solana Pay style mint (devnet)", "B", [b64], {
+      note: `reference build. mint ${mint.publicKey.toBase58()}, key discarded after signing. Do not send.`,
+    });
+  } catch (e) {
+    return fail(`mint build failed, ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
 
 export async function candymachine(body: Body): Promise<InspectResult> {
   if (!body.wallet) return fail("connect wallet first");
