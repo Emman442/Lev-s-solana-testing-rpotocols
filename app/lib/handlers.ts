@@ -7,7 +7,6 @@ import {
   createNoopSigner, createSignerFromKeypair, generateSigner,
   publicKey, signerIdentity, some, transactionBuilder,
 } from "@metaplex-foundation/umi";
-import { createLaunch, genesis, type CreateLaunchInput } from "@metaplex-foundation/genesis";
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import {
   MINT_SIZE,
@@ -15,6 +14,19 @@ import {
   createInitializeMint2Instruction,
   getMinimumBalanceForRentExemptMint,
 } from "@solana/spl-token";
+import {
+  createLaunch,
+  genesis,
+  isGenesisApiError,
+  isGenesisApiNetworkError,
+  isGenesisValidationError,
+  type CreateLaunchInput,
+} from "@metaplex-foundation/genesis";
+
+const RPC = {
+  devnet: "https://api.devnet.solana.com",
+  "mainnet-beta": process.env.SOLANA_RPC_MAINNET || "https://api.mainnet-beta.solana.com",
+} as const;
 
 
 export type InspectResult = {
@@ -174,23 +186,44 @@ export async function dflow(body: Body): Promise<InspectResult> {
     return ok("DFlow order", "A", [json.transaction]);
 }
 
+
+async function latestBlockhash(url: string): Promise<string | undefined> {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getLatestBlockhash", params: [{ commitment: "confirmed" }] }),
+  }).then((x) => x.json());
+  return r?.result?.value?.blockhash;
+}
+
+function txToB64(t: unknown): string | null {
+  if (typeof t === "string") return t;
+  const data = (t as { data?: number[] } | null)?.data;
+  return Array.isArray(data) ? Buffer.from(data).toString("base64") : null;
+}
+
 export async function tensor(body: Body): Promise<InspectResult> {
-    if (!body.mint || !body.owner || !body.maxPrice || !body.blockhash) {
-        return fail("needs mint, owner, maxPrice, blockhash of a live listing");
-    }
-    const q = new URLSearchParams({
-        buyer: body.wallet || "",
-        mint: body.mint,
-        owner: body.owner,
-        maxPrice: body.maxPrice,
-        blockhash: body.blockhash,
-    });
-    const json = await fetch("https://api.mainnet.tensordev.io/api/v1/tx/buy?" + q, {
-        headers: { "x-tensor-api-key": process.env.TENSOR_API_KEY || "" },
-    }).then((r) => r.json());
-    const txs = (json.txs || []).map((t: { tx?: string; txV0?: string }) => t.tx || t.txV0).filter(Boolean) as string[];
-    if (!txs.length) return fail("tensor buy failed", { json });
-    return ok("Tensor buy", "A", txs);
+  if (!body.wallet) return fail("connect wallet first");
+  if (!body.mint || !body.owner || !body.maxPrice) {
+    return fail("needs mint, owner and maxPrice of a live Tensor listing");
+  }
+  // if (!process.env.TENSOR_API_KEY) return fail("set TENSOR_API_KEY");
+
+  const blockhash = body.blockhash || (await latestBlockhash(RPC["mainnet-beta"]));
+  if (!blockhash) return fail("could not fetch a recent blockhash");
+
+  const q = new URLSearchParams({
+    buyer: body.wallet, mint: body.mint, owner: body.owner, maxPrice: body.maxPrice, blockhash,
+  });
+  const res = await fetch("https://api.mainnet.tensordev.io/api/v1/tx/buy?" + q, {
+    headers: { "x-tensor-api-key": "89fecaad-af57-4d3e-9d03-e822507aa93a" },
+  });
+  const json = await res.json().catch(() => null);
+  const txs = ((json?.txs ?? []) as { tx?: unknown; txV0?: unknown }[])
+    .map((t) => txToB64(t.txV0) || txToB64(t.tx))
+    .filter(Boolean) as string[];
+  if (!txs.length) return fail("tensor buy failed", { json: { status: res.status, response: json } });
+  return ok("Tensor buy", "A", txs);
 }
 
 export async function magiceden(body: Body): Promise<InspectResult> {
@@ -217,21 +250,26 @@ function readSecret(): Uint8Array {
   return Uint8Array.from(JSON.parse(cleaned));
 }
 
+
 export async function metaplexGenesis(body: Body): Promise<InspectResult> {
   if (!body.wallet) return fail("connect wallet first");
+  const cluster = body.cluster === "mainnet-beta" ? "mainnet-beta" : "devnet";
+  const network = cluster === "mainnet-beta" ? "solana-mainnet" : "solana-devnet";
 
   try {
-    const umi = createUmi("https://api.devnet.solana.com").use(genesis());
+    const umi = createUmi(RPC[cluster]).use(genesis());
     umi.use(signerIdentity(createNoopSigner(publicKey(body.wallet))));
 
     const input: CreateLaunchInput = {
       wallet: body.wallet,
-      network: "solana-devnet",
+      network,
       token: {
         name: "Lev Inspect",
         symbol: "LEVI",
-        image: "https://res.cloudinary.com/alchemy-website/image/upload/v1694675413/dapp-store/dapp-logos/Metaplex.jpg",
-        description: "Inspection only, devnet",
+        image:
+          process.env.GENESIS_IMAGE_URL ||
+          "https://res.cloudinary.com/alchemy-website/image/upload/v1694675413/dapp-store/dapp-logos/Metaplex.jpg",
+        description: `Inspection only, ${cluster}`,
       },
       launchType: "launchpool",
       launch: {
@@ -249,13 +287,68 @@ export async function metaplexGenesis(body: Body): Promise<InspectResult> {
     const txs = res.transactions.map((tx) =>
       Buffer.from(umi.transactions.serialize(tx)).toString("base64")
     );
-    return ok("Metaplex Genesis launch (devnet)", "unverified", txs, {
-      note: `mint ${res.mintAddress}, genesis ${res.genesisAccount}. Do not send.`,
+    return ok(`Metaplex Genesis launch (${cluster})`, "unverified", txs, {
+      note: [
+        `mint ${res.mintAddress}`,
+        `genesis ${res.genesisAccount}`,
+        `${txs.length} transactions, send in order`,
+        cluster === "mainnet-beta"
+          ? "Mainnet build. Sending creates a real launch and spends SOL. Do not send unless Lev asks."
+          : "Devnet build.",
+      ].join(". "),
     });
   } catch (e) {
+    if (isGenesisValidationError(e)) {
+      return fail(`genesis rejected the input on "${e.field}", ${e.message}`);
+    }
+    if (isGenesisApiError(e)) {
+      return fail(`genesis API error ${e.statusCode}`, { json: e.responseBody });
+    }
+    if (isGenesisApiNetworkError(e)) {
+      return fail(`genesis network error, ${e.cause.message}`);
+    }
     return fail(`genesis failed, ${e instanceof Error ? e.message : String(e)}`);
   }
 }
+// export async function metaplexGenesis(body: Body): Promise<InspectResult> {
+//   if (!body.wallet) return fail("connect wallet first");
+
+//   try {
+//     const umi = createUmi("https://api.devnet.solana.com").use(genesis());
+//     umi.use(signerIdentity(createNoopSigner(publicKey(body.wallet))));
+
+//     const input: CreateLaunchInput = {
+//       wallet: body.wallet,
+//       network: "solana-devnet",
+//       token: {
+//         name: "Lev Inspect",
+//         symbol: "LEVI",
+//         image: "https://res.cloudinary.com/alchemy-website/image/upload/v1694675413/dapp-store/dapp-logos/Metaplex.jpg",
+//         description: "Inspection only, devnet",
+//       },
+//       launchType: "launchpool",
+//       launch: {
+//         launchpool: {
+//           tokenAllocation: 500_000_000,
+//           depositStartTime: new Date(Date.now() + 48 * 60 * 60 * 1000),
+//           raiseGoal: 250,
+//           raydiumLiquidityBps: 5000,
+//           fundsRecipient: body.wallet,
+//         },
+//       },
+//     };
+
+//     const res = await createLaunch(umi, {}, input);
+//     const txs = res.transactions.map((tx) =>
+//       Buffer.from(umi.transactions.serialize(tx)).toString("base64")
+//     );
+//     return ok("Metaplex Genesis launch (devnet)", "unverified", txs, {
+//       note: `mint ${res.mintAddress}, genesis ${res.genesisAccount}. Do not send.`,
+//     });
+//   } catch (e) {
+//     return fail(`genesis failed, ${e instanceof Error ? e.message : String(e)}`);
+//   }
+// }
 
 
 
@@ -339,6 +432,59 @@ console.log(process.env.CM_GUARD ? "CM_GUARD is set" : "CM_GUARD is not set");
     return fail(`candy machine build failed, ${e instanceof Error ? e.message : String(e)}`);
   }
 }
+
+// export async function candymachine(body: Body): Promise<InspectResult> {
+//   if (!body.wallet) return fail("connect wallet first");
+
+//   const cluster = body.cluster === "mainnet-beta" ? "mainnet-beta" : "devnet";
+//   const rpc = RPC[cluster];
+
+//   const missing = ["THIRD_PARTY_SECRET", "CM_ID", "CM_COLLECTION", "CM_GUARD"].filter(
+//     (k) => !process.env[k]
+//   );
+//   if (missing.length) return fail(`missing env vars ${missing.join(", ")}`);
+
+//   try {
+//     const umi = createUmi(rpc).use(mplCore()).use(mplCandyMachine());
+//     umi.use(signerIdentity(createNoopSigner(publicKey(body.wallet))));
+
+//     const thirdParty = createSignerFromKeypair(
+//       umi,
+//       umi.eddsa.createKeypairFromSecretKey(readSecret())
+//     );
+//     const asset = generateSigner(umi);
+
+
+//     const txBuilder = await transactionBuilder()
+//       .add(setComputeUnitLimit(umi, { units: 800_000 }))
+//       .add(
+//         mintV1(umi, {
+//           candyMachine: publicKey(process.env.CM_ID!),
+//           collection: publicKey(process.env.CM_COLLECTION!),
+//           candyGuard: publicKey(process.env.CM_GUARD!),
+//           asset,
+//           mintArgs: { thirdPartySigner: some({ signer: thirdParty }) },
+//         })
+//       )
+//       .setLatestBlockhash(umi);
+
+//     const tx = await txBuilder.buildAndSign(umi);
+//     const b64 = Buffer.from(umi.transactions.serialize(tx)).toString("base64");
+
+//     return ok(`Candy Machine mint (${cluster})`, "B", [b64], {
+//       note: [
+//         `Core mintV1. asset ${asset.publicKey}.`,
+//         `third party signer ${thirdParty.publicKey}.`,
+//         cluster === "mainnet-beta"
+//           ? "Mainnet build only. Do not send unless Lev asks. Sending spends SOL and mints a real asset."
+//           : "Devnet build.",
+//         "CM_ID, CM_COLLECTION, and CM_GUARD must exist on this cluster.",
+//       ].join(" "),
+//     });
+//   } catch (e) {
+//     return fail(`candy machine build failed, ${e instanceof Error ? e.message : String(e)}`);
+//   }
+// }
 
 export const handlers = {
     bags,
