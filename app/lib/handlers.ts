@@ -67,7 +67,7 @@ export async function bagsLaunch(body: Body): Promise<InspectResult> {
   }
   const res = await fetch("https://public-api-v2.bags.fm/api/v1/token-launch/create-launch-transaction", {
     method: "POST",
-    headers: { "x-api-key": process.env.BAGS_API_KEY!, "content-type": "application/json" },
+    headers: { "x-api-key": "bags_prod_iciJDmcuPJn--Uyv_wDnSJT1U5et_sG_UEJEFHoeK8w", "content-type": "application/json" },
     body: JSON.stringify({
       ipfs: body.ipfs,
       tokenMint: body.tokenMint,
