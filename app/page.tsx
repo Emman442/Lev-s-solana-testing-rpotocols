@@ -11,7 +11,7 @@ import { TxProof } from "./components/tx-proof";
 const OTHER = [
   { id: "jupiter", label: "Jupiter", needsWallet: true },
   { id: "jupiter-order", label: "Jupiter Ultra", needsWallet: true },
-  { id: "raydium", label: "Raydium", needsWallet: true },
+  // { id: "raydium", label: "Raydium", needsWallet: true },
   // { id: "dflow", label: "DFlow", needsWallet: true },
   // { id: "tensor", label: "Tensor", needsWallet: true },
   { id: "candymachine", label: "Candy Machine", needsWallet: true   },

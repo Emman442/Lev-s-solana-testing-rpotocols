@@ -219,7 +219,6 @@ function readSecret(): Uint8Array {
 
 export async function metaplexGenesis(body: Body): Promise<InspectResult> {
   if (!body.wallet) return fail("connect wallet first");
-  // if (!process.env.GENESIS_IMAGE_URL) return fail("set GENESIS_IMAGE_URL to an https image url");
 
   try {
     const umi = createUmi("https://api.devnet.solana.com").use(genesis());
