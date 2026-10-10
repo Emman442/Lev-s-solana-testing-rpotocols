@@ -97,7 +97,7 @@ export async function jupiter(body: Body): Promise<InspectResult> {
     const q = new URLSearchParams({
         inputMint: SOL,
         outputMint: USDC,
-        amount: body.amount || "100000000",
+        amount: body.amount || "1000000",
         slippageBps: "50",
     });
     const quote = await fetch("https://api.jup.ag/swap/v1/quote?" + q, { headers }).then((r) => r.json());
@@ -118,7 +118,7 @@ export async function jupiterOrder(body: Body): Promise<InspectResult> {
     const q = new URLSearchParams({
         inputMint: SOL,
         outputMint: USDC,
-        amount: body.amount || "100000000",
+        amount: body.amount || "1000000",
         taker: body.wallet || "",
     });
     const json = await fetch("https://api.jup.ag/ultra/v1/order?" + q, {
@@ -134,7 +134,7 @@ export async function raydium(body: Body): Promise<InspectResult> {
     const q = new URLSearchParams({
         inputMint: SOL,
         outputMint: USDC,
-        amount: body.amount || "100000000",
+        amount: body.amount || "1000000",
         slippageBps: "50",
         txVersion: "V0",
     });

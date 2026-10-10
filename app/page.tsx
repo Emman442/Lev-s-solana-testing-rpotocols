@@ -11,12 +11,12 @@ import { TxProof } from "./components/tx-proof";
 const OTHER = [
   { id: "jupiter", label: "Jupiter", needsWallet: true },
   { id: "jupiter-order", label: "Jupiter Ultra", needsWallet: true },
-  // { id: "raydium", label: "Raydium", needsWallet: true },
+  { id: "raydium", label: "Raydium", needsWallet: true },
   // { id: "dflow", label: "DFlow", needsWallet: true },
   // { id: "tensor", label: "Tensor", needsWallet: true },
-  { id: "candymachine", label: "Candy Machine", needsWallet: true   },
+  { id: "candymachine", label: "Candy Machine", needsWallet: true },
   { id: "metaplex", label: "Metaplex Genesis", needsWallet: true },
-{ id: "solana-pay-mint", label: "Solana Pay mint", needsWallet: true },
+  { id: "solana-pay-mint", label: "Solana Pay mint", needsWallet: true },
 ] as const;
 
 type ApiJson = {
@@ -189,7 +189,12 @@ export default function Home() {
               Proof{proofLabel ? `, ${proofLabel}` : ""}
             </h2>
             {txs.length ? (
-              <TxProof txs={txs} me={address} tokenMint={tokenMint} />
+              <TxProof
+                txs={txs}
+                me={address}
+                tokenMint={tokenMint}
+                cluster={proofLabel.toLowerCase().includes("devnet") ? "devnet" : "mainnet"}
+              />
             ) : (
               <p className="rounded border border-dashed p-4 text-sm opacity-70">
                 Build a transaction and its signature slots will show up here.
