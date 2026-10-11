@@ -5,7 +5,7 @@ export type Cluster = "devnet" | "mainnet";
 const rpcUrl = (c: Cluster) =>
   c === "devnet"
     ? "https://api.devnet.solana.com"
-    : process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com";
+    : process.env.NEXT_PUBLIC_RPC_URL || "https://mainnet.helius-rpc.com/?api-key=36630f30-eb16-4b14-90bd-1de494fdddbd";
 
 async function rpc(cluster: Cluster, method: string, params: unknown[]) {
   const res = await fetch(rpcUrl(cluster), {

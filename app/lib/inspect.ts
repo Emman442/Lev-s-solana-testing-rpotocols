@@ -7,6 +7,9 @@ export type Inspect = {
   bytes: number;
   feePayer: string;
   accounts: number;
+  instructions: number;
+  lookups: number;
+  lookupAccounts: number;
   slots: Slot[];
 };
 
@@ -24,15 +27,50 @@ function shortvec(b: Uint8Array, o: number): [number, number] {
 export function inspectRaw(raw: Uint8Array): Inspect {
   const [nSigs, n] = shortvec(raw, 0);
   const msg = raw.slice(n + nSigs * 64);
+
   let o = 0;
   let version: "legacy" | number = "legacy";
   if (msg[0] & 0x80) { version = msg[0] & 0x7f; o = 1; }
+  if (version !== "legacy" && version !== 0) {
+    throw new Error(`transaction version ${version} is not supported by this inspector`);
+  }
+
   const numRequired = msg[o];
-  o += 3;
+  o += 3; // header, three bytes
+
   const [nKeys, ks] = shortvec(msg, o);
   o += ks;
   const keys: Uint8Array[] = [];
   for (let i = 0; i < nKeys; i++) keys.push(msg.slice(o + i * 32, o + (i + 1) * 32));
+  o += nKeys * 32;
+
+  o += 32; // recent blockhash
+
+  const [nIx, ixs] = shortvec(msg, o);
+  o += ixs;
+  for (let i = 0; i < nIx; i++) {
+    o += 1; // program id index
+    const [nAcc, as] = shortvec(msg, o);
+    o += as + nAcc;
+    const [nData, ds] = shortvec(msg, o);
+    o += ds + nData;
+  }
+
+  let lookups = 0;
+  let lookupAccounts = 0;
+  if (version === 0) {
+    const [nLut, ls] = shortvec(msg, o);
+    o += ls;
+    lookups = nLut;
+    for (let i = 0; i < nLut; i++) {
+      o += 32; // lookup table address
+      const [nW, ws] = shortvec(msg, o);
+      o += ws + nW;
+      const [nR, rs] = shortvec(msg, o);
+      o += rs + nR;
+      lookupAccounts += nW + nR;
+    }
+  }
 
   const slots: Slot[] = [];
   for (let i = 0; i < numRequired; i++) {
@@ -44,5 +82,15 @@ export function inspectRaw(raw: Uint8Array): Inspect {
       valid: filled ? nacl.sign.detached.verify(msg, sig, keys[i]) : null,
     });
   }
-  return { version, bytes: raw.length, feePayer: bs58.encode(keys[0]), accounts: nKeys, slots };
+
+  return {
+    version,
+    bytes: raw.length,
+    feePayer: bs58.encode(keys[0]),
+    accounts: nKeys,
+    instructions: nIx,
+    lookups,
+    lookupAccounts,
+    slots,
+  };
 }

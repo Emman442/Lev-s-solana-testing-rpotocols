@@ -24,6 +24,7 @@ type ApiJson = {
   ok?: boolean;
   error?: string;
   label?: string;
+  cluster?: string;
   txs?: string[];
   configKey?: string;
   info?: { tokenMint?: string; tokenMetadata?: string };
@@ -37,6 +38,7 @@ export default function Home() {
   const [result, setResult] = useState<unknown>(null);
   const [txs, setTxs] = useState<string[]>([]);
   const [proofLabel, setProofLabel] = useState("");
+  const [proofCluster, setProofCluster] = useState<"devnet" | "mainnet">("mainnet");
   const [cluster, setCluster] = useState<Cluster>("devnet");
 
   const [name, setName] = useState("Inspect Only");
@@ -58,6 +60,7 @@ export default function Home() {
     setResult(json);
     setTxs(json.txs ?? []);
     setProofLabel(json.label || "");
+    setProofCluster(json.cluster === "devnet" ? "devnet" : "mainnet");
     if (json.info?.tokenMint) setTokenMint(json.info.tokenMint);
     if (json.info?.tokenMetadata) setIpfs(json.info.tokenMetadata);
     if (json.configKey) setConfigKey(json.configKey);
@@ -115,8 +118,9 @@ export default function Home() {
     return post("/api/bags-launch", { wallet: address, tokenMint, ipfs, configKey }, "bags-launch");
   };
 
-  const run = (id: string) => post(`/api/${id}`, { wallet: address, cluster }, id);
+  const run = (id: string) => post(`/api/${id}`, { wallet: address }, id);
 
+  const browseCollections = () => post("/api/tensor-listings", {}, "tensor-find");
   const findCollections = () => post("/api/tensor-listings", { query: tQuery }, "tensor-find");
   const findListings = () => post("/api/tensor-listings", { collId: tColl }, "tensor-find");
   const buildTensor = () => {
@@ -185,7 +189,10 @@ export default function Home() {
                 <select
                   className="rounded border bg-background px-2 py-1"
                   value={cluster}
-                  onChange={(e) => setCluster(e.target.value as Cluster)}
+                  onChange={(e) => {
+                    setCluster(e.target.value as Cluster);
+                    setTxs([]);
+                  }}
                 >
                   <option value="devnet">devnet</option>
                   <option value="mainnet-beta">mainnet</option>
@@ -213,11 +220,14 @@ export default function Home() {
               <summary className="cursor-pointer text-sm font-semibold">Tensor buy</summary>
               <div className="mt-3 grid gap-2">
                 <p className="text-xs opacity-70">
-                  Search a collection, copy its id, list the cheapest listings, then copy one listing's mint, owner and price below.
+                  Browse or search a collection, copy its id, list the cheapest listings, then copy one listing's mint, owner and price below.
                 </p>
+                <button className={btn} disabled={busy !== null} onClick={browseCollections}>
+                  Browse most-listed collections
+                </button>
                 <input className={input} value={tQuery} onChange={(e) => setTQuery(e.target.value)} placeholder="collection name to search" />
                 <button className={btn} disabled={busy !== null || !tQuery} onClick={findCollections}>Search collections</button>
-                <input className={input} value={tColl} onChange={(e) => setTColl(e.target.value)} placeholder="collection id from the search result" />
+                <input className={input} value={tColl} onChange={(e) => setTColl(e.target.value)} placeholder="collection id from the result" />
                 <button className={btn} disabled={busy !== null || !tColl} onClick={findListings}>Show cheapest listings</button>
 
                 <input className={input} value={tMint} onChange={(e) => setTMint(e.target.value)} placeholder="NFT mint" />
@@ -237,15 +247,10 @@ export default function Home() {
           {/* Right column, the proof panel */}
           <div className="grid content-start gap-4 lg:sticky lg:top-6 lg:self-start">
             <h2 className="text-sm font-semibold">
-              Proof{proofLabel ? `, ${proofLabel}` : ""}
+              Proof{proofLabel ? `, ${proofLabel}` : ""}{txs.length ? ` · ${proofCluster}` : ""}
             </h2>
             {txs.length ? (
-              <TxProof
-                txs={txs}
-                me={address}
-                tokenMint={tokenMint}
-                cluster={proofLabel.toLowerCase().includes("devnet") ? "devnet" : "mainnet"}
-              />
+              <TxProof txs={txs} me={address} tokenMint={tokenMint} cluster={proofCluster} />
             ) : (
               <p className="rounded border border-dashed p-4 text-sm opacity-70">
                 Build a transaction and its signature slots will show up here.

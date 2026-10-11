@@ -13,7 +13,7 @@ const short = (k: string) => `${k.slice(0, 4)}…${k.slice(-4)}`;
 function toBytes(s: string): Uint8Array | null {
   const text = s.trim();
   if (!/[+/=]/.test(text)) {
-    try { return bs58.decode(text); } catch {}
+    try { return bs58.decode(text); } catch { }
   }
   try {
     return Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
@@ -67,7 +67,9 @@ function Card({ b58, index, total, me, tokenMint, cluster }: {
   const [busy, setBusy] = useState(false);
 
   if (!info || !raw) {
-    return <div className="rounded-xl border p-4 text-sm">Could not decode this transaction as base58 or base64.</div>;
+    return <div className="rounded-xl border p-4 text-sm">
+      Could not decode this transaction. It may not be base58 or base64, or it may use a newer transaction version this inspector does not read.
+    </div>;
   }
 
   const preSigned = info.slots.some((s) => s.filled && s.valid && s.pubkey !== me);
@@ -128,7 +130,9 @@ function Card({ b58, index, total, me, tokenMint, cluster }: {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Transaction {index + 1} of {total}, before the wallet signs</h3>
         <span className="text-xs opacity-70">
-          {info.version === "legacy" ? "legacy" : `v${info.version}`} · {info.accounts} accounts · {cluster}
+          {info.version === "legacy" ? "legacy" : `v${info.version}`} · {info.accounts} accounts
+          {info.lookupAccounts ? ` + ${info.lookupAccounts} via ${info.lookups} lookup tables` : ""}
+          {` · ${info.instructions} instructions · ${cluster}`}
         </span>
       </div>
 
